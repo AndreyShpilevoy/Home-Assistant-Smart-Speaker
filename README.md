@@ -1,3 +1,39 @@
+# Why
+
+Original repo is great, but a bit out of date. To compile the code you need to do some troubleshouting. Figure out which version of platform use, select specific PR for external component. Also in my case even after all this changes - volume control was still broken. Volume was always on 100%.
+
+# Main advantages
+
+- Up-to-date (for now)
+- Volume control works
+- Still great project from **Tristam** and **jmiahman**
+
+# Changes in comparison with the original repo:
+
+- Schema changes
+    - Max98357 connected to 5v instead of 3.3v (not necessary, only if you want to have louder sound)
+- Script changes
+    - Removed external_components
+    - `speaker` and `media_player` replaced with standard ones
+    - added `mixer` and `resampler` to allow `media_player` to utilize a single output `speaker`
+    - The original LED effects were too bright for me, changed it
+    - removed idle effect
+    - removed onboard LED (it was used for debug only anyway)
+
+# If Max98357 is too loud/quiet, you can adjust Gain
+GAIN is, well, the gain setting. You can have a gain of 3dB, 6dB, 9dB, 12dB or 15dB.
+
+- 15dB if a 100K resistor is connected between GAIN and GND
+- 12dB if GAIN is connected directly to GND
+- 9dB if GAIN is not connected to anything (this is the default)
+- 6dB if GAIN is connected directly to Vin
+- 3dB if a 100K resistor is connected between GAIN and Vin
+
+# Problems
+
+Only issue that I gound so far: after flashing firemware it extreamly quiet. But power cycle fixing it. So just unplag Type-C and plug it again.
+
+# ORIGINAL READ ME
 # Home Assistant Voice Assistant Smart Speaker
 
 In the search for an "easy" Voice Assistant I ran across a lot of different implementations, many of which were confusing or left out key information needed. I decided to use an ESP32-S3-DevKitC-1-N8R2 Development Board. I finally found a Blog (https://tristam.ie/2024/1126/) that helped at least get a Voice Assistant up and running the only problem was, it wasn't a media_player. A lot of the work here is based on that work, except the Yaml file. I spent some time reviewing available working speakers including purchasing the ESP32-Box-S3 as an example of something that worked and finally came up with something that "works". It's still a work in progress, but I can play music on it, announcements, and it's working fairly well. Note: This is a Work in progress, not a finished project.  

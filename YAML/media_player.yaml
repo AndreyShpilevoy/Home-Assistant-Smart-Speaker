@@ -1,13 +1,18 @@
 substitutions:
-  name: smart-speaker
-  friendly_name: smart-speaker
+  name: esp32-voice-assistant-01
+  friendly_name: ESP32-Voice-Assistant-01
+  device_description: "ESP32 Voice Assistant Media Speaker"
+  
   api_key: "ReplaceMe"
+  ap_password: "ReplaceMe"
+  ota_password: "ReplaceMe"
+
 
 ####################################################################
 #### change the micro wake word to be used on the line below   #####
 ####      options are okay_nabu, hey_jarvis, alexa             #####
 ####################################################################
-  micro_wake_word_model: hey_jarvis
+  micro_wake_word_model: alexa
 ####################################################################
 
   # Phases of the Voice Assistant
@@ -27,24 +32,36 @@ substitutions:
   voice_assist_muted_phase_id: '12'
 
   #pins
-  i2s_out_lrclk_pin: GPIO46 # LRC on Max98357
-  i2s_out_bclk_pin: GPIO9 # BCLK on Max98357
-  i2s_in_lrclk_pin: GPIO6 # WS on INMP441
-  i2s_in_bclk_pin: GPIO7 # SLK on INMP441
+  # I2S Audio SPK
+  i2s_lrclk_pin_out: GPIO46
+  i2s_bclk_pin_out: GPIO9
+  i2s_dout_pin_spk: GPIO8
+
+  # I2S AUdio MIC
+  i2s_lrclk_pin_in: GPIO6
+  i2s_bclk_pin_in: GPIO7
+  i2s_din_pin_mic: GPIO4
+
+  #Led's  
   led_pin: GPIO48 # on-board LED
   led_bar_pin: GPIO16 # Light Bar LED
-  speaker_pin: GPIO8 # DIN on Max98357
-  mic_pin: GPIO4 # SD on INMP441
+
+  min_brightness: 11%
+  max_brightness: 21%
+
+  psramMode: octal #2MB PSRAM = quad mode, 8MB or 16MB = octal
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  min_version: 2024.9.0
+  comment: ${device_description}
+  min_version: 2025.2.0
   platformio_options:
     board_build.flash_mode: dio
   on_boot:
       priority: 600
       then:
+        - media_player.volume_set: !lambda return id(media_volume).state / 100;
         # Run the script to refresh the LED status
         - script.execute: control_led
         # - output.turn_off: set_low_speaker
@@ -59,35 +76,27 @@ esphome:
 
 esp32:
   board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  variant: esp32s3
   framework:
     type: esp-idf
+    version: recommended
     sdkconfig_options:
-      # need to set a s3 compatible board for the adf-sdk to compile
-      # board specific code is not used though
       CONFIG_ESP32_S3_BOX_BOARD: "y"
       CONFIG_ESP32_WIFI_STATIC_RX_BUFFER_NUM: "16"
       CONFIG_ESP32_WIFI_DYNAMIC_RX_BUFFER_NUM: "512"
-      CONFIG_TCPIP_RECVMBOX_SIZE: "512"
 
       CONFIG_TCP_SND_BUF_DEFAULT: "65535"
       CONFIG_TCP_WND_DEFAULT: "512000"
       CONFIG_TCP_RECVMBOX_SIZE: "512"
 
       CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
-      CONFIG_ESP32S3_DATA_CACHE_64KB:      "y"
-      CONFIG_ESP32S3_DATA_CACHE_LINE_64B:  "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
 
 psram:
-  mode: quad
+  mode: ${psramMode}
   speed: 80MHz
-
-external_components:
-  - source:
-      type: git
-      url: https://github.com/gnumpi/esphome_audio
-      ref: dev-next
-    components: [ adf_pipeline, i2s_audio ]
-    refresh: 0s
 
 api:
   encryption:
@@ -103,9 +112,10 @@ api:
 
 ota:
   - platform: esphome
+    password: ${ota_password}
 
 logger:
-  hardware_uart: USB_SERIAL_JTAG
+  level: DEBUG
 
 
 wifi:
@@ -115,7 +125,7 @@ wifi:
 
   ap:
     ssid: ${name}
-    password: esp32123
+    password: ${ap_password}
   on_connect:
     - lambda: |-
         id(wifi_connection) = true;
@@ -127,7 +137,7 @@ wifi:
 
 captive_portal:
 
-web_server:
+improv_serial: 
 
 time:
   - platform: homeassistant
@@ -208,11 +218,6 @@ select:
             - micro_wake_word.start
             - script.execute: control_led
 script:
-  - id: set_volume
-    then:
-      - media_player.volume_set:
-          volume: !lambda return 0.5 + id(speaker_volume) * 0.05 ;
-
   - id: show_volume
     mode: restart
     then:
@@ -268,20 +273,15 @@ script:
             - script.execute: control_led_init_state
 
 
-  # Script executed during initialisation: In this example: Turn the LED in green with a slow pulse 🟢
+  # Script executed during initialisation: In this example: Turn the LED in green with a fast pulse 🟢
   - id: control_led_init_state
     then:
-      - light.turn_on:
-          id: led
-          blue: 0%
-          red: 0%
-          green: 100%
-          effect: "Fast Pulse"
       - light.turn_on:
           id: middle_led
           blue: 0%
           red: 0%
           green: 100%
+          brightness: ${max_brightness}
           effect: "Fast Pulse"
 
 
@@ -289,43 +289,24 @@ script:
   - id: control_led_no_ha_connection_state
     then:
       - light.turn_off:
-          id: led
-      - light.turn_off:
           id: middle_led
 
-  # Script executed when the voice assistant is idle (waiting for a wake word): In this example: Turn the LED in white with 20% of brightness ⚪
+  # Script executed when the voice assistant is idle (waiting for a wake word): In this example: Turn off the LED
   - id: control_led_voice_assist_idle_phase
     then:
-      - light.turn_on:
-          id: led
-          blue: 100%
-          red: 100%
-          green: 100%
-          brightness: 20%
-          effect: "none"
-      - light.turn_on:
+      - light.turn_off:
           id: middle_led
-          blue: 100%
-          red: 100%
-          green: 100%
-          brightness: 20%
-          effect: "Waiting for wake word"
 
 
   # Script executed when the voice assistant is listening to a command: In this example: Turn the LED in blue with a slow pulse 🔵
   - id: control_led_voice_assist_listening_phase
     then:
       - light.turn_on:
-          id: led
-          blue: 100%
-          red: 0%
-          green: 0%
-          effect: "Slow Pulse"
-      - light.turn_on:
           id: middle_led
           blue: 100%
           red: 0%
           green: 0%
+          brightness: ${max_brightness}
           effect: "Slow Pulse"
 
 
@@ -333,16 +314,11 @@ script:
   - id: control_led_voice_assist_thinking_phase
     then:
       - light.turn_on:
-          id: led
-          blue: 100%
-          red: 0%
-          green: 0%
-          effect: "Fast Pulse"
-      - light.turn_on:
           id: middle_led
           blue: 100%
           red: 0%
           green: 0%
+          brightness: ${max_brightness}
           effect: "Fast Pulse"
 
 
@@ -350,38 +326,50 @@ script:
   - id: control_led_voice_assist_replying_phase
     then:
       - light.turn_on:
-          id: led
+          # id: led
+          id: middle_led
           blue: 100%
           red: 0%
           green: 0%
-          brightness: 100%
+          brightness: ${max_brightness}
           effect: "none"
 
 
-  # Script executed when the voice assistant encounters an error: In this example: Turn the LED in red, solid (no pulse) 🔴
+  # Script executed when the voice assistant encounters an error: In this example: Turn the LED in red, solid (slow pulse) 🔴
   - id: control_led_voice_assist_error_phase
     then:
       - light.turn_on:
-          id: led
+          # id: led
+          id: middle_led
           blue: 0%
           red: 100%
           green: 0%
-          brightness: 100%
+          brightness: ${max_brightness}
+          effect: "Slow Pulse"
+
+
+  # Script executed when the voice assistant is muted: In this example: Turn the LED in red, solid (no pulse) 🔴
+  - id: control_led_voice_assist_muted_phase
+    then:
+      - light.turn_on:
+          id: middle_led
+          blue: 0%
+          red: 100%
+          green: 0%
+          brightness: ${max_brightness}
           effect: "none"
 
 
-  # Script executed when the voice assistant is muted: In this example: Turn off the LED
-  - id: control_led_voice_assist_muted_phase
-    then:
-      - light.turn_off:
-          id: led
-
-
-  # Script executed when the voice assistant is not ready: In this example: Turn off the LED
+  # Script executed when the voice assistant is not ready: In this example: Turn the LED in yellow, solid (slow pulse) 🟡
   - id: control_led_voice_assist_not_ready_phase
     then:
-      - light.turn_off:
-          id: led
+      - light.turn_on:
+          id: middle_led
+          blue: 0%
+          red: 100%
+          green: 100%
+          brightness: ${max_brightness}
+          effect: "Slow Pulse"
 
 globals:
   - id: wifi_connection
@@ -398,11 +386,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: "false"
-
-  - id: speaker_volume
-    type: int
-    restore_value: no
-    initial_value: '5'
 
   - id: voice_assistant_phase
     type: int
@@ -432,8 +415,12 @@ switch:
       - lambda: |-
           id(mute_value) = true;
       - media_player.volume_set: 0%
+      - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
+      - script.execute: control_led
     on_turn_off:
-      - media_player.volume_set: 100%
+      - media_player.volume_set: 50%      
+      - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+      - script.execute: control_led
       - lambda: |-
           id(mute_value) = false;
       - if:
@@ -486,36 +473,9 @@ switch:
 light:
   - platform: esp32_rmt_led_strip
     rgb_order: GRB
-    pin: ${led_pin}
-    num_leds: 1
-    rmt_channel: 0
-    chipset: WS2812
-    name: "Status LED"
-    id: led
-    disabled_by_default: True
-    # entity_category: diagnostic
-    icon: mdi:led-on
-    default_transition_length: 0s
-    effects:
-      - pulse:
-          name: "Slow Pulse"
-          transition_length: 250ms
-          update_interval: 250ms
-          min_brightness: 50%
-          max_brightness: 100%
-      - pulse:
-          name: "Fast Pulse"
-          transition_length: 100ms
-          update_interval: 100ms
-          min_brightness: 50%
-          max_brightness: 100%
-
-  - platform: esp32_rmt_led_strip
-    rgb_order: GRB
     chipset: ws2812
     pin: ${led_bar_pin}
     num_leds: 8
-    rmt_channel: 1
     name: "Status LED Bar"
     id: led_bar
     icon: mdi:led-on
@@ -533,40 +493,31 @@ light:
       - id: led_bar
         from: 1
         to: 6
+        reversed: true #set false if you want to chage direction of the led bar on change volume
     default_transition_length: 100ms
     effects:
       - pulse:
           name: "Slow Pulse"
           transition_length: 250ms
           update_interval: 250ms
-          min_brightness: 60%
-          max_brightness: 80%
+          min_brightness: ${min_brightness}
+          max_brightness: ${max_brightness}
       - pulse:
           name: "Fast Pulse"
           transition_length: 100ms
           update_interval: 100ms
-          min_brightness: 60%
-          max_brightness: 80%
-      - addressable_scan:
-          name: "Scanning"
-          move_interval: 70ms
-          scan_width: 1
-      - pulse:
-          name: "Waiting for wake word"
-          min_brightness:  15%
-          max_brightness: 35%
-          transition_length: 3s      # defaults to 1s
-          update_interval: 3s
+          min_brightness: ${min_brightness}
+          max_brightness: ${max_brightness}
       - addressable_lambda:
           name: show_volume
           update_interval: 50ms
           lambda: |-
-            int int_volume = int(id(adf_media_player).volume * 100.0f * it.size());
+            int int_volume = int(id(media_volume).state * it.size());
             int full_leds = int_volume / 100;
             int last_brightness = int_volume % 100;
             int i = 0;
             for(; i < full_leds; i++) {
-              it[i] = Color::WHITE;
+              it[i] = Color(255, 255, 255);
             }
             if(i < 4) {
               it[i++] = Color(64, 64, 64).fade_to_white(last_brightness*256/100);
@@ -586,41 +537,14 @@ light:
           name: "Slow Pulse"
           transition_length: 250ms
           update_interval: 250ms
-          min_brightness: 60%
-          max_brightness: 80%
+          min_brightness: ${min_brightness}
+          max_brightness: ${max_brightness}
       - pulse:
           name: "Fast Pulse"
           transition_length: 100ms
           update_interval: 100ms
-          min_brightness: 60%
-          max_brightness: 80%
-      - addressable_scan:
-          name: "Scanning"
-          move_interval: 70ms
-          scan_width: 1
-      - pulse:
-          name: "Waiting for wake word"
-          min_brightness:  15%
-          max_brightness: 35%
-          transition_length: 3s      # defaults to 1s
-          update_interval: 3s
-      - addressable_lambda:
-          name: show_volume
-          update_interval: 50ms
-          lambda: |-
-            int int_volume = int(id(adf_media_player).volume * 100.0f * it.size());
-            int full_leds = int_volume / 100;
-            int last_brightness = int_volume % 100;
-            int i = 0;
-            for(; i < full_leds; i++) {
-              it[i] = Color::WHITE;
-            }
-            if(i < 4) {
-              it[i++] = Color(64, 64, 64).fade_to_white(last_brightness*256/100);
-            }
-            for(; i < it.size(); i++) {
-              it[i] = Color(64, 64, 64);
-            }
+          min_brightness: ${min_brightness}
+          max_brightness: ${max_brightness}
 
 sensor:
 
@@ -634,71 +558,89 @@ text_sensor:
     id: wakeword_location
 
 i2s_audio:
-  - id: i2s_out
-    i2s_lrclk_pin: ${i2s_out_lrclk_pin}
-    i2s_bclk_pin: ${i2s_out_bclk_pin}
-  - id: i2s_in
-    i2s_lrclk_pin: ${i2s_in_lrclk_pin}
-    i2s_bclk_pin: ${i2s_in_bclk_pin}
-    access_mode: duplex
+  - id: i2s_audio_in
+    i2s_lrclk_pin: $i2s_lrclk_pin_in
+    i2s_bclk_pin: $i2s_bclk_pin_in
 
-adf_pipeline:
-  - platform: i2s_audio
-    type: audio_out
-    id: adf_i2s_out
-    i2s_audio_id: i2s_out
-    i2s_dout_pin: ${speaker_pin}
-    adf_alc: false
-    sample_rate: 16000
-    bits_per_sample: 32bit
-    fixed_settings: true
+  - id: i2s_audio_out
+    i2s_lrclk_pin: $i2s_lrclk_pin_out
+    i2s_bclk_pin: $i2s_bclk_pin_out
 
+microphone:
   - platform: i2s_audio
-    type: audio_in
-    id: adf_i2s_in
-    i2s_audio_id: i2s_in
-    i2s_din_pin: ${mic_pin}
-    pdm: false
+    id: i2s_mic
+    adc_type: external
     channel: left
-    sample_rate: 16000
+    sample_rate: 16000    
     bits_per_sample: 32bit
-    fixed_settings: true
+    i2s_audio_id: i2s_audio_in
+    i2s_din_pin: $i2s_din_pin_mic
+    pdm: false
+
+speaker:
+  - platform: i2s_audio
+    id: i2s_spk
+    i2s_audio_id: i2s_audio_out
+    i2s_dout_pin: $i2s_dout_pin_spk
+    dac_type: external
+    sample_rate: 48000
+    bits_per_sample: 32bit
+    channel: mono
+    timeout: never
+    
+  - platform: mixer
+    id: mixing_speaker    
+    num_channels: 1
+    output_speaker: i2s_spk
+    source_speakers:
+      - id: announcement_mixing_input        
+      - id: media_mixing_input        
+  - platform: resampler
+    id: announcement_resampling_speaker
+    output_speaker: announcement_mixing_input
+    sample_rate: 48000
+    bits_per_sample: 16
+  - platform: resampler
+    id: media_resampling_speaker
+    output_speaker: media_mixing_input
+    sample_rate: 48000
+    bits_per_sample: 16
 
 media_player:
-  - platform: adf_pipeline
-    id: adf_media_player
-    name: ${friendly_name}
-    keep_pipeline_alive: true
+  - platform: speaker
+    id: i2s_media
+    name: "${name} Media Player"
     internal: false
-    announcement_audio:
-      sample_rate: 24000
-      bits_per_sample: 16
+    volume_increment: 0.1
+    volume_min: 60%
+    volume_max: 100%
+    task_stack_in_psram: true
+    announcement_pipeline:
+      speaker: announcement_resampling_speaker      
       num_channels: 1
-    pipeline:
-      - self
-      - resampler
-      - adf_i2s_out
+    media_pipeline:
+      speaker: media_resampling_speaker      
+      num_channels: 1
+    on_idle:    
+      - number.set:
+          id: media_volume
+          value: !lambda return id(i2s_media).volume * 100;
+    on_announcement:
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: 20
+          duration: 0.0s
     on_state:
       then:
         - lambda: |-
             static float old_volume = -1;
-            float new_volume = id(adf_media_player).volume;
-            if(abs(new_volume-old_volume) > 0.0001) {
+            float new_volume = id(media_volume).state;
+            if(abs(new_volume-old_volume) > 0.01) {
               if(old_volume != -1) {
                 id(show_volume)->execute();
               }
             }
             old_volume = new_volume;
-
-microphone:
-  - platform: adf_pipeline
-    id: adf_microphone
-    gain_log2: 3
-    keep_pipeline_alive: true
-    pipeline:
-      - adf_i2s_in
-      - resampler
-      - self
 
 micro_wake_word:
   vad:
@@ -710,8 +652,8 @@ micro_wake_word:
 
 voice_assistant:
   id: va
-  microphone: adf_microphone
-  media_player: adf_media_player
+  microphone: i2s_mic
+  media_player: i2s_media
   use_wake_word: true
   noise_suppression_level: 4
   auto_gain: 31dBFS
@@ -767,5 +709,18 @@ voice_assistant:
               else:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
           - script.execute: control_led
+
+number:
+  - platform: template
+    id: media_volume
+    internal: True
+    name: "${name} Media Volume"
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 100
+    optimistic: true
+    restore_value: true
+    device_class: volume
 
 ################## config end ##################
