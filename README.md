@@ -6,6 +6,7 @@ Original repo is great, but a bit out of date. To compile the code you need to d
 
 - Up-to-date (for now)
 - Volume control works
+- 2 settings for day and night brightness on LED strip (day/night hours are configurable)
 - Still great project from **Tristam** and **jmiahman**
 
 # Changes in comparison with the original repo:
