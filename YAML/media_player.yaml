@@ -46,8 +46,10 @@ substitutions:
   led_pin: GPIO48 # on-board LED
   led_bar_pin: GPIO16 # Light Bar LED
 
-  min_brightness: 11%
-  max_brightness: 21%
+  min_brightness_night_percent: 11%
+  max_brightness_night_percent: 21%
+  min_brightness_day_percent: 60%
+  max_brightness_day_percent: 80%
 
   psramMode: octal #2MB PSRAM = quad mode, 8MB or 16MB = octal
 
@@ -180,6 +182,17 @@ interval:
                     wifi.connected:
                 then:
                   - lambda: "id(wifi_connection) = false;"
+  - interval: 60sec
+    then:
+      - if:
+          condition:
+            lambda: return (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state));
+          then:
+            - lambda: id(min_brightness) = ${min_brightness_day};
+            - lambda: id(max_brightness) = ${max_brightness_day};
+          else:
+            - lambda: id(min_brightness) = ${min_brightness_night};
+            - lambda: id(max_brightness) = ${max_brightness_night};
 
 select:
   - platform: template
@@ -223,7 +236,8 @@ script:
     then:
       - light.turn_on:
           id: middle_led
-          effect: show_volume
+          effect: show_volume          
+          brightness: !lambda 'return id(max_brightness);'
       - delay: 1s
       - script.execute: control_led
 
@@ -281,8 +295,14 @@ script:
           blue: 0%
           red: 0%
           green: 100%
-          brightness: ${max_brightness}
-          effect: "Fast Pulse"
+          brightness: !lambda 'return id(max_brightness);'
+          #effect: "Fast Pulse"
+          effect: !lambda |-
+            if (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state)) {
+              return "Fast Pulse Day";
+            } else {
+              return "Fast Pulse Night";
+            }
 
 
   # Script executed when the device has no connection to Home Assistant: In this example: Turn off the LED
@@ -306,8 +326,14 @@ script:
           blue: 100%
           red: 0%
           green: 0%
-          brightness: ${max_brightness}
-          effect: "Slow Pulse"
+          brightness: !lambda 'return id(max_brightness);'
+          #effect: "Slow Pulse"
+          effect: !lambda |-
+            if (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state)) {
+              return "Slow Pulse Day";
+            } else {
+              return "Slow Pulse Night";
+            }
 
 
   # Script executed when the voice assistant is processing the command: In this example: Turn the LED in blue with a fast pulse 🔵
@@ -318,8 +344,14 @@ script:
           blue: 100%
           red: 0%
           green: 0%
-          brightness: ${max_brightness}
-          effect: "Fast Pulse"
+          brightness: !lambda 'return id(max_brightness);'
+          #effect: "Fast Pulse"
+          effect: !lambda |-
+            if (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state)) {
+              return "Fast Pulse Day";
+            } else {
+              return "Fast Pulse Night";
+            }
 
 
   # Script executed when the voice assistant is replying to a command: In this example: Turn the LED in blue, solid (no pulse) 🔵
@@ -331,7 +363,7 @@ script:
           blue: 100%
           red: 0%
           green: 0%
-          brightness: ${max_brightness}
+          brightness: !lambda 'return id(max_brightness);'
           effect: "none"
 
 
@@ -344,8 +376,14 @@ script:
           blue: 0%
           red: 100%
           green: 0%
-          brightness: ${max_brightness}
-          effect: "Slow Pulse"
+          brightness: !lambda 'return id(max_brightness);'
+          #effect: "Slow Pulse"
+          effect: !lambda |-
+            if (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state)) {
+              return "Slow Pulse Day";
+            } else {
+              return "Slow Pulse Night";
+            }
 
 
   # Script executed when the voice assistant is muted: In this example: Turn the LED in red, solid (no pulse) 🔴
@@ -356,7 +394,7 @@ script:
           blue: 0%
           red: 100%
           green: 0%
-          brightness: ${max_brightness}
+          brightness: !lambda 'return id(max_brightness);'
           effect: "none"
 
 
@@ -368,8 +406,14 @@ script:
           blue: 0%
           red: 100%
           green: 100%
-          brightness: ${max_brightness}
-          effect: "Slow Pulse"
+          brightness: !lambda 'return id(max_brightness);'
+          #effect: "Slow Pulse"
+          effect: !lambda |-
+            if (id(ha_time).now().hour > int(id(day_switch_time).state) && id(ha_time).now().hour < int(id(night_switch_time).state)) {
+              return "Slow Pulse Day";
+            } else {
+              return "Slow Pulse Night";
+            }
 
 globals:
   - id: wifi_connection
@@ -396,6 +440,16 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'true'
+
+  - id: min_brightness
+    type: double
+    restore_value: no
+    initial_value: ${min_brightness_night}
+
+  - id: max_brightness
+    type: double
+    restore_value: no
+    initial_value: ${max_brightness_night}
 
 button:
   - platform: restart
@@ -497,17 +551,29 @@ light:
     default_transition_length: 100ms
     effects:
       - pulse:
-          name: "Slow Pulse"
+          name: "Slow Pulse Night"
           transition_length: 250ms
           update_interval: 250ms
-          min_brightness: ${min_brightness}
-          max_brightness: ${max_brightness}
+          min_brightness: ${min_brightness_night_percent}
+          max_brightness: ${max_brightness_night_percent}
       - pulse:
-          name: "Fast Pulse"
+          name: "Fast Pulse Night"
           transition_length: 100ms
           update_interval: 100ms
-          min_brightness: ${min_brightness}
-          max_brightness: ${max_brightness}
+          min_brightness: ${min_brightness_night_percent}
+          max_brightness: ${max_brightness_night_percent}
+      - pulse:
+          name: "Slow Pulse Day"
+          transition_length: 250ms
+          update_interval: 250ms
+          min_brightness: ${min_brightness_day_percent}
+          max_brightness: ${max_brightness_day_percent}
+      - pulse:
+          name: "Fast Pulse Day"
+          transition_length: 100ms
+          update_interval: 100ms
+          min_brightness: ${min_brightness_day_percent}
+          max_brightness: ${max_brightness_day_percent}
       - addressable_lambda:
           name: show_volume
           update_interval: 50ms
@@ -517,7 +583,7 @@ light:
             int last_brightness = int_volume % 100;
             int i = 0;
             for(; i < full_leds; i++) {
-              it[i] = Color(255, 255, 255);
+              it[i] = Color::WHITE;
             }
             if(i < 4) {
               it[i++] = Color(64, 64, 64).fade_to_white(last_brightness*256/100);
@@ -532,19 +598,6 @@ light:
         from: 7
         to: 7
     default_transition_length: 100ms
-    effects:
-      - pulse:
-          name: "Slow Pulse"
-          transition_length: 250ms
-          update_interval: 250ms
-          min_brightness: ${min_brightness}
-          max_brightness: ${max_brightness}
-      - pulse:
-          name: "Fast Pulse"
-          transition_length: 100ms
-          update_interval: 100ms
-          min_brightness: ${min_brightness}
-          max_brightness: ${max_brightness}
 
 sensor:
 
@@ -722,5 +775,22 @@ number:
     optimistic: true
     restore_value: true
     device_class: volume
-
+  - platform: template
+    id: night_switch_time
+    name: "Night switch time"
+    optimistic: true
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 22
+    restore_value: true
+  - platform: template
+    id: day_switch_time
+    name: "Day switch time"
+    optimistic: true
+    min_value: 0
+    max_value: 23
+    step: 1
+    initial_value: 7
+    restore_value: true
 ################## config end ##################
