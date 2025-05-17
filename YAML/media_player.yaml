@@ -7,7 +7,6 @@ substitutions:
   ap_password: "ReplaceMe"
   ota_password: "ReplaceMe"
 
-
 ####################################################################
 #### change the micro wake word to be used on the line below   #####
 ####      options are okay_nabu, hey_jarvis, alexa             #####
@@ -46,10 +45,17 @@ substitutions:
   led_pin: GPIO48 # on-board LED
   led_bar_pin: GPIO16 # Light Bar LED
 
+  min_brightness_night: '0.11'
+  max_brightness_night: '0.21'
+  min_brightness_day: '0.60'
+  max_brightness_day: '0.80'
+
   min_brightness_night_percent: 11%
   max_brightness_night_percent: 21%
   min_brightness_day_percent: 60%
   max_brightness_day_percent: 80%
+
+  timezone: "Europe/Amsterdam"
 
   psramMode: octal #2MB PSRAM = quad mode, 8MB or 16MB = octal
 
@@ -144,6 +150,7 @@ improv_serial:
 time:
   - platform: homeassistant
     id: ha_time
+    timezone: ${timezone}
 
 interval:
   - interval: 10s
@@ -407,6 +414,24 @@ script:
             } else {
               return "Slow Pulse Night";
             }
+  # Script executed when we want to play sounds on the device.
+  - id: play_sound
+    parameters:
+      priority: bool
+      sound_file: "audio::AudioFile*"
+    then:
+      - lambda: |-
+          if (priority) {
+            id(i2s_media)
+              ->make_call()
+              .set_command(media_player::MediaPlayerCommand::MEDIA_PLAYER_COMMAND_STOP)
+              .set_announcement(true)
+              .perform();
+          }
+          if ( (id(i2s_media).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING ) || priority) {
+            id(i2s_media)
+              ->play_file(sound_file, true, false);
+          }
 
 globals:
   - id: wifi_connection
@@ -455,6 +480,11 @@ switch:
     id: mute_switch
     optimistic: True
     on_turn_on:
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda return id(mute_switch_on_sound);
+      - delay: 300ms
       - voice_assistant.stop:
       - micro_wake_word.stop:
       - delay: 50ms
@@ -480,6 +510,10 @@ switch:
           else:
             - delay: 50ms
             - micro_wake_word.start
+      - script.execute:
+          id: play_sound
+          priority: true
+          sound_file: !lambda return id(mute_switch_off_sound);
     restore_mode: RESTORE_DEFAULT_OFF
 
   - platform: template
@@ -658,8 +692,6 @@ media_player:
     name: "${name} Media Player"
     internal: false
     volume_increment: 0.1
-    volume_min: 60%
-    volume_max: 100%
     task_stack_in_psram: true
     announcement_pipeline:
       speaker: announcement_resampling_speaker      
@@ -667,7 +699,7 @@ media_player:
     media_pipeline:
       speaker: media_resampling_speaker      
       num_channels: 1
-    on_idle:    
+    on_idle:
       - number.set:
           id: media_volume
           value: !lambda return id(i2s_media).volume * 100;
@@ -675,26 +707,65 @@ media_player:
       - mixer_speaker.apply_ducking:
           id: media_mixing_input
           decibel_reduction: 20
-          duration: 0.0s
+          duration: 0.0s  
     on_state:
-      then:
-        - lambda: |-
-            static float old_volume = -1;
-            float new_volume = id(media_volume).state;
-            if(abs(new_volume-old_volume) > 0.01) {
-              if(old_volume != -1) {
-                id(show_volume)->execute();
+      - then:
+          - lambda: |-
+              static float old_volume = -1;
+              float new_volume = id(media_volume).state;
+              if(abs(new_volume-old_volume) > 0.01) {
+                if(old_volume != -1) {
+                  id(show_volume)->execute();
+                }
               }
-            }
-            old_volume = new_volume;
+              old_volume = new_volume;
+          - if:
+              condition:
+                and:
+                  - not:
+                      voice_assistant.is_running:
+                  - not:
+                      media_player.is_announcing:
+              then:
+                - mixer_speaker.apply_ducking:
+                    id: media_mixing_input
+                    decibel_reduction: 0
+                    duration: 1.0s    
+    files:
+      - id: mute_switch_off_sound
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/mute_switch_off.flac
+      - id: mute_switch_on_sound
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/mute_switch_on.flac
+      - id: wake_word_triggered_sound
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/wake_word_triggered.flac
 
 micro_wake_word:
   vad:
   models:
     - model: ${micro_wake_word_model}
   on_wake_word_detected:
-    - voice_assistant.start:
-        wake_word: !lambda return wake_word;
+    - if:
+        condition:
+          voice_assistant.is_running:
+        then:
+          voice_assistant.stop:
+        # Stop any other media player announcement
+        else:
+          - if:
+              condition:
+                media_player.is_announcing:
+              then:
+                - media_player.stop:
+                    announcement: true
+              # Start the voice assistant and play the wake sound, if enabled
+              else:
+                - script.execute:
+                    id: play_sound
+                    priority: true
+                    sound_file: !lambda return id(wake_word_triggered_sound);
+                - delay: 300ms
+                - voice_assistant.start:
+                    wake_word: !lambda return wake_word;
 
 voice_assistant:
   id: va
@@ -703,7 +774,7 @@ voice_assistant:
   use_wake_word: true
   noise_suppression_level: 4
   auto_gain: 31dBFS
-  volume_multiplier: 4.0
+  volume_multiplier: 8
   on_client_connected:
     - lambda: id(init_in_progress) = false;
     - if:
@@ -755,6 +826,19 @@ voice_assistant:
               else:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
           - script.execute: control_led
+    # Stop ducking in case of error
+    - if:
+        condition:
+          and:
+            - not:
+                voice_assistant.is_running:
+            - not:
+                media_player.is_announcing:
+        then:
+          - mixer_speaker.apply_ducking:
+              id: media_mixing_input
+              decibel_reduction: 0
+              duration: 1.0s
 
 number:
   - platform: template
