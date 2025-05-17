@@ -419,7 +419,13 @@ script:
     parameters:
       priority: bool
       sound_file: "audio::AudioFile*"
-    then:
+    then:      
+      # Start ducking
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: 20
+          duration: 0.0s  
+      # Play sound
       - lambda: |-
           if (priority) {
             id(i2s_media)
@@ -431,7 +437,12 @@ script:
           if ( (id(i2s_media).state != media_player::MediaPlayerState::MEDIA_PLAYER_STATE_ANNOUNCING ) || priority) {
             id(i2s_media)
               ->play_file(sound_file, true, false);
-          }
+          }      
+      # Stop ducking
+      - mixer_speaker.apply_ducking:
+          id: media_mixing_input
+          decibel_reduction: 0
+          duration: 1.0s
 
 globals:
   - id: wifi_connection
@@ -484,7 +495,7 @@ switch:
           id: play_sound
           priority: true
           sound_file: !lambda return id(mute_switch_on_sound);
-      - delay: 300ms
+      - delay: 1000ms
       - voice_assistant.stop:
       - micro_wake_word.stop:
       - delay: 50ms
@@ -691,7 +702,7 @@ media_player:
     id: i2s_media
     name: "${name} Media Player"
     internal: false
-    volume_increment: 0.1
+    volume_increment: 1%
     task_stack_in_psram: true
     announcement_pipeline:
       speaker: announcement_resampling_speaker      
@@ -703,11 +714,6 @@ media_player:
       - number.set:
           id: media_volume
           value: !lambda return id(i2s_media).volume * 100;
-    on_announcement:
-      - mixer_speaker.apply_ducking:
-          id: media_mixing_input
-          decibel_reduction: 20
-          duration: 0.0s  
     on_state:
       - then:
           - lambda: |-
@@ -719,18 +725,6 @@ media_player:
                 }
               }
               old_volume = new_volume;
-          - if:
-              condition:
-                and:
-                  - not:
-                      voice_assistant.is_running:
-                  - not:
-                      media_player.is_announcing:
-              then:
-                - mixer_speaker.apply_ducking:
-                    id: media_mixing_input
-                    decibel_reduction: 0
-                    duration: 1.0s    
     files:
       - id: mute_switch_off_sound
         file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/mute_switch_off.flac
@@ -793,6 +787,11 @@ voice_assistant:
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_listening_phase_id};
     - script.execute: control_led
+    # Start ducking
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 20
+        duration: 0.0s  
   on_stt_vad_end:
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
     - script.execute: control_led
@@ -810,6 +809,11 @@ voice_assistant:
           - micro_wake_word.start
     - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
     - script.execute: control_led
+    # Stop ducking
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 0
+        duration: 1.0s
   on_error:
     - if:
         condition:
@@ -826,19 +830,11 @@ voice_assistant:
               else:
                 - lambda: id(voice_assistant_phase) = ${voice_assist_muted_phase_id};
           - script.execute: control_led
-    # Stop ducking in case of error
-    - if:
-        condition:
-          and:
-            - not:
-                voice_assistant.is_running:
-            - not:
-                media_player.is_announcing:
-        then:
-          - mixer_speaker.apply_ducking:
-              id: media_mixing_input
-              decibel_reduction: 0
-              duration: 1.0s
+    # Stop ducking
+    - mixer_speaker.apply_ducking:
+        id: media_mixing_input
+        decibel_reduction: 0
+        duration: 1.0s
 
 number:
   - platform: template
