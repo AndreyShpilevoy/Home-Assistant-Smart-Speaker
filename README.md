@@ -7,6 +7,7 @@ Original repo is great, but a bit out of date. To compile the code you need to d
 - Up-to-date (for now)
 - Volume control works
 - 2 settings for day and night brightness on LED strip (day/night hours are configurable)
+- added sound effects for events: mute on/off, wake word triggered
 - Still great project from **Tristam** and **jmiahman**
 
 # Changes in comparison with the original repo:
@@ -29,10 +30,6 @@ GAIN is, well, the gain setting. You can have a gain of 3dB, 6dB, 9dB, 12dB or 1
 - 9dB if GAIN is not connected to anything (this is the default)
 - 6dB if GAIN is connected directly to Vin
 - 3dB if a 100K resistor is connected between GAIN and Vin
-
-# Problems
-
-Only issue that I gound so far: after flashing firemware it extreamly quiet. But power cycle fixing it. So just unplag Type-C and plug it again.
 
 # ORIGINAL READ ME
 # Home Assistant Voice Assistant Smart Speaker
