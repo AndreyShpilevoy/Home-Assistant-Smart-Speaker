@@ -6,7 +6,7 @@ substitutions:
   api_key: "ReplaceMe"
   ap_password: "ReplaceMe"
   ota_password: "ReplaceMe"
-
+  
 ####################################################################
 #### change the micro wake word to be used on the line below   #####
 ####      options are okay_nabu, hey_jarvis, alexa             #####
@@ -638,6 +638,82 @@ light:
     default_transition_length: 100ms
 
 sensor:
+  - platform: adc
+    id: button_adc
+    pin: 1
+    update_interval: 200ms
+    attenuation: auto
+    internal: true
+
+binary_sensor:
+  - platform: template
+    name: "Play/Pause"
+    id: btnPlayPause
+    lambda: |-
+      if (id(button_adc).state > 0.45 && id(button_adc).state < 0.6) {
+        return true;
+      } else {
+        return false;
+      }
+    on_press:
+      then:
+      - media_player.toggle
+  - platform: template
+    name: "Volume UP"
+    id: btnVolumeUP
+    lambda: |-
+      if (id(button_adc).state > 1.00 && id(button_adc).state < 1.20) {
+        return true;
+      } else {
+        return false;
+      }
+    on_press:
+      then:
+        - number.set:
+            id: media_volume
+            value: !lambda return id(media_volume).state + 10;
+        - media_player.volume_set: !lambda return (id(media_volume).state / 100);
+  - platform: template
+    name: "Volume DOWN"
+    id: btnVolumDOWNP
+    lambda: |-
+      if (id(button_adc).state > 1.55 && id(button_adc).state < 1.80) {
+        return true;
+      } else {
+        return false;
+      }
+    on_press:
+      then:
+        - number.set:
+            id: media_volume
+            value: !lambda return id(media_volume).state - 10;
+        - media_player.volume_set: !lambda return (id(media_volume).state / 100);
+  - platform: template
+    name: "Custom Action"
+    id: btnCustomAction
+    lambda: |-
+      if (id(button_adc).state > 2.10 && id(button_adc).state < 2.35) {
+        return true;
+      } else {
+        return false;
+      }      
+    on_press:
+      then:
+        - voice_assistant.stop
+        - delay: 200ms
+        - voice_assistant.start_continuous:
+  - platform: template
+    name: "Mute"
+    id: btnMute
+    lambda: |-
+      if (id(button_adc).state > 2.5 && id(button_adc).state < 2.90) {
+        return true;
+      } else {
+        return false;
+      }
+    on_press:
+      then:
+        - switch.toggle: mute_switch
 
 text_sensor:
   - platform: wifi_info
