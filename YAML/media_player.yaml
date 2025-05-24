@@ -6,7 +6,7 @@ substitutions:
   api_key: "ReplaceMe"
   ap_password: "ReplaceMe"
   ota_password: "ReplaceMe"
-
+  
 ####################################################################
 #### change the micro wake word to be used on the line below   #####
 ####      options are okay_nabu, hey_jarvis, alexa             #####
@@ -444,6 +444,19 @@ script:
           decibel_reduction: 0
           duration: 1.0s
 
+  # Script used activate the stop word if the TTS step is long.
+  # Why is this wrapped on a script?
+  #   Becasue we want to stop the sequence if the TTS step is faster than that.
+  #   This allows us to prevent having the deactivation of the stop word before its own activation.
+  - id: activate_stop_word_once
+    then:
+      - delay: 1s
+      - micro_wake_word.enable_model: stop
+      - wait_until:
+          not:
+            media_player.is_announcing:
+      - micro_wake_word.disable_model: stop
+
 globals:
   - id: wifi_connection
     type: bool
@@ -585,7 +598,7 @@ light:
       - id: led_bar
         from: 1
         to: 6
-        reversed: true #set false if you want to chage direction of the led bar on change volume
+        reversed: false #set false if you want to chage direction of the led bar on change volume
     default_transition_length: 100ms
     effects:
       - pulse:
@@ -637,7 +650,6 @@ light:
         to: 7
     default_transition_length: 100ms
 
-sensor:
 
 text_sensor:
   - platform: wifi_info
@@ -727,16 +739,21 @@ media_player:
               old_volume = new_volume;
     files:
       - id: mute_switch_off_sound
-        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/mute_switch_off.flac
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/download/mute_switch_off.flac
       - id: mute_switch_on_sound
-        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/mute_switch_on.flac
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/download/mute_switch_on.flac
       - id: wake_word_triggered_sound
-        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/sounds/wake_word_triggered.flac
+        file: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/download/wake_word_triggered.flac
 
 micro_wake_word:
+  id: mww
   vad:
   models:
     - model: ${micro_wake_word_model}
+    - model: https://github.com/AndreyShpilevoy/Home-Assistant-Smart-Speaker/raw/main/download/stop.json
+      id: stop
+      internal: true
+  stop_after_detection: false
   on_wake_word_detected:
     - if:
         condition:
@@ -764,8 +781,9 @@ micro_wake_word:
 voice_assistant:
   id: va
   microphone: i2s_mic
+  micro_wake_word: mww
   media_player: i2s_media
-  use_wake_word: true
+  use_wake_word: false
   noise_suppression_level: 4
   auto_gain: 31dBFS
   volume_multiplier: 8
@@ -798,6 +816,8 @@ voice_assistant:
   on_tts_start:
     - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
     - script.execute: control_led
+    # Start a script that would potentially enable the stop word if the response is longer than a second
+    - script.execute: activate_stop_word_once
   on_end:
     - if:
         condition:
