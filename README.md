@@ -5,10 +5,14 @@ Original repo is great, but a bit out of date. To compile the code you need to d
 # Main advantages
 
 - Up-to-date (for now)
-- Volume control works
+- Code compeletely rewritten. Code *Home Assistant Voice: Preview Edition* (https://github.com/esphome/home-assistant-voice-pe) was used as base
+    - Working volume regulator
+    - Working timers
+    - Sound effects for events: mute on/off, wake word triggered, timer and error
+    - Stop wake word can be used to stop answer
+    - Removed unused devices (mini-jack, factory_reset)
+- Led actions was adopted to hardware
 - 2 settings for day and night brightness on LED strip (day/night hours are configurable)
-- added sound effects for events: mute on/off, wake word triggered
-- Still great project from **Tristam** and **jmiahman**
 
 # Changes in comparison with the original repo:
 
@@ -17,10 +21,11 @@ Original repo is great, but a bit out of date. To compile the code you need to d
 - Script changes
     - Removed external_components
     - `speaker` and `media_player` replaced with standard ones
-    - added `mixer` and `resampler` to allow `media_player` to utilize a single output `speaker`
+    - Added `mixer` and `resampler` to allow `media_player` to utilize a single output `speaker`
     - The original LED effects were too bright for me, changed it
-    - removed idle effect
-    - removed onboard LED (it was used for debug only anyway)
+    - Removed idle effect
+    - Removed onboard LED (it was used for debug only anyway)
+    - Code compeletely rewritten. Code *Home Assistant Voice: Preview Edition* (https://github.com/esphome/home-assistant-voice-pe) was used as base
 
 # If Max98357 is too loud/quiet, you can adjust Gain
 GAIN is, well, the gain setting. You can have a gain of 3dB, 6dB, 9dB, 12dB or 15dB.
