@@ -32,6 +32,8 @@ substitutions:
   min_brightness_day_percent: 60%
   max_brightness_day_percent: 80%
 
+  button_pin: GPIO1
+
   timezone: "Europe/Amsterdam"
 
   psramMode: octal #2MB PSRAM = quad mode, 8MB or 16MB = octal
@@ -373,6 +375,250 @@ light:
         from: 7
         to: 7
     default_transition_length: 100ms
+
+sensor:
+  - platform: adc
+    id: button_adc
+    pin: ${button_pin}
+    update_interval: 50ms
+    attenuation: auto
+    internal: true
+    on_value_range:
+      # Clear all states event
+      - below: 0.50
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Play/Pause event
+      - above: 0.52
+        below: 0.55
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: ON
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Volume UP event
+      - above: 1.05
+        below: 1.10
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: ON
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Volume DOWN event
+      - above: 1.60
+        below: 1.65
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: ON
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Cancel VA answer event
+      - above: 2.15
+        below: 2.20
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: ON
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Volume MUTE MIC event
+      - above: 2.50
+        below: 2.65
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: ON
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: OFF
+      # Volume MUTE event
+      - above: 2.70
+        below: 2.90
+        then:
+          - binary_sensor.template.publish:
+              id: btnPlayPause
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumeUP
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnVolumDOWN
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnCancelVA
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMuteMic
+              state: OFF
+          - binary_sensor.template.publish:
+              id: btnMute
+              state: ON
+
+
+binary_sensor:
+  - platform: template
+    name: "Play/Pause"
+    id: btnPlayPause
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      - if:
+          condition:
+            media_player.is_playing:
+          then:
+            - media_player.pause:
+          else:
+            if:
+              condition:
+                media_player.is_paused:
+              then:
+                - media_player.play:
+
+  - platform: template
+    name: "Volume UP"
+    id: btnVolumeUP
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      then:
+        - media_player.volume_set: !lambda return id(external_media_player).volume + 0.1;
+
+  - platform: template
+    name: "Volume DOWN"
+    id: btnVolumDOWN
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      then:
+        - media_player.volume_set: !lambda return id(external_media_player).volume - 0.1;
+
+  - platform: template
+    name: "Cancel VA"
+    id: btnCancelVA
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      - if:
+          condition:
+            voice_assistant.is_running:
+          then:
+            voice_assistant.stop:
+          # Stop any other media player announcement
+          else:
+            - if:
+                condition:
+                  media_player.is_announcing:
+                then:
+                  - media_player.stop:
+                      announcement: true
+
+  - platform: template
+    name: "Mute microphone"
+    id: btnMuteMic
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      then:
+        - switch.toggle: mic_mute_switch
+
+  - platform: template
+    name: "Mute"
+    id: btnMute
+    internal: True
+    filters:
+      - delayed_on_off: 150ms 
+    on_press:
+      then:
+        - switch.toggle: mute_switch
 
 script:
   # Master script controlling the LEDs, based on different conditions : initialization in progress, wifi and api connected and voice assistant phase.
