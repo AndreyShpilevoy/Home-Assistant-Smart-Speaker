@@ -13,6 +13,8 @@ Original repo is great, but a bit out of date. To compile the code you need to d
     - Removed unused devices (mini-jack, factory_reset)
 - Led actions was adopted to hardware
 - 2 settings for day and night brightness on LED strip (day/night hours are configurable)
+- Added 5 ADC buttons (Play/Pause, Volume UP, Volume DOWN, Interrupt VA, Mute) and 6 events (Interrupt VA + Mute = Mute mic only)
+- Added chema for ADC buttons array. Also added LID, but it's WIP and made for *12x12 SMD Push Button* and 2x8cm *Porotype Soldering board*
 
 # Changes in comparison with the original repo:
 
